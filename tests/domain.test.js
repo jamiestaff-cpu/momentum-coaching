@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {performance,validResult,localDate} from '../domain.js';
+const e=(id,change={})=>({id,protocol:'fly200',distance:200,start:'flying',...change});
+const r=(id,time,gear=125)=>({effort_id:id,time,gear});
+test('time deterioration uses fastest earlier matching result and strict threshold',()=>{const p=performance([e('a'),e('b'),e('c')],[r('a',10),r('b',10.3),r('c',9.8)],2);assert.equal(p[1].alert,true);assert.equal(p[2].loss,0);assert.equal(p[0].alert,false);});
+test('changed actual gear does not compare',()=>assert.equal(performance([e('a'),e('b')],[r('a',10),r('b',12,130)],2)[1].loss,0));
+test('different protocol, distance or start is a fresh baseline',()=>{for(const change of [{protocol:'new'},{distance:100},{start:'standing'}])assert.equal(performance([e('a'),e('b',change)],[r('a',10),r('b',12)],2)[1].loss,0);});
+test('incomplete protocols and missing values do not produce alerts',()=>{assert.equal(performance([e('a',{protocol:''})],[r('a',10)],2)[0].loss,null);assert.equal(performance([e('a')],[],2)[0].loss,null);assert.equal(performance([e('a')],[r('a',10,null)],2)[0].loss,null);});
+test('disabled threshold permits deliberate fatigue',()=>assert.equal(performance([e('a'),e('b')],[r('a',10),r('b',12)],null)[1].alert,false));
+test('validation catches invalid split, RPE, negatives and nonfinite values',()=>{for(const v of [{time:10,split:11},{rpe:11},{power:-1},{gear:Infinity}])assert.equal(validResult(v),false);assert.equal(validResult({time:10,split:4.9,rpe:9}),true);});
+test('local date uses calendar date',()=>assert.equal(localDate(new Date(2026,10,1,23,30)),'2026-11-01'));
+import {gearInches,gearOptions} from '../domain.js';
+test('gear chart matches reference and corrects 47 by 18 typo',()=>{assert.equal(gearInches(42,12),94.5);assert.equal(gearInches(70,14),135);assert.equal(gearInches(47,18),70.5);});
+test('target finder ranks all 319 combinations by proximity',()=>{const options=gearOptions(125);assert.equal(options.length,319);for(let i=1;i<options.length;i++)assert.ok(Math.abs(options[i].inches-125)>=Math.abs(options[i-1].inches-125));assert.equal(gearInches(60,15,26),104);});
